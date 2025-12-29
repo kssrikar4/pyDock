@@ -42,9 +42,15 @@ A fully automated blind docking pipeline that requires only three user inputs: p
 - **AutoDock Vina**: 1.2.0 or higher
 
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install System Dependencies
+
+**Install git from [git-scm.com](https://git-scm.com/install/) & ensure git is installed**
+
+```bash
+git --version
+```
 
 **Install Python from python.org & ensure Python 3.8+ installed**
 
@@ -54,10 +60,17 @@ python3 --version
 
 **Download AutoDock Vina: https://vina.scripps.edu/download/ & Extract**
 
-### 2. Install Python Packages
+### 2. Installation
+
+#### Clone the repository:
 
 ```bash
-# Create virtual environment (recommended)
+git clone https://github.com/kssrikar4/pyDock.git
+cd pyDock
+```
+##### Create virtual environment (recommended)
+
+```bash
 # Linux/macOS
 python3 -m venv py
 source py/bin/activate

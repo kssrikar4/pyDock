@@ -4,6 +4,4 @@ meeko
 biopython
 numpy
 scipy
-gemmi
-prolif
-MDAnalysis
+pathlib

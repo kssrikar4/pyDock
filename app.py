@@ -74,28 +74,80 @@ def validate_ligand(mol):
         raise ValueError("Ligand has no atoms")
     return True
 
+def clean_protein_pdb(pdb_content):
+    cleaned_lines = []
+    
+    for line in pdb_content.split('\n'):
+        if line.startswith('ATOM'):
+            residue_name = line[17:20].strip()
+            if residue_name not in ['HOH', 'WAT', 'TIP', 'TIP3', 'SOL']:
+                cleaned_lines.append(line)
+        elif line.startswith(('HEADER', 'TITLE', 'COMPND', 'SOURCE', 'KEYWDS',
+                               'EXPDTA', 'AUTHOR', 'REVDAT', 'JRNL', 'REMARK',
+                               'SEQRES', 'CRYST1', 'ORIGX', 'SCALE', 'MODEL', 'TER', 'ENDMDL')):
+            cleaned_lines.append(line)
+    
+    if cleaned_lines and not cleaned_lines[-1].startswith('END'):
+        cleaned_lines.append('END')
+    
+    return '\n'.join(cleaned_lines)
+
+
+
 def prepare_protein_meeko(pdb_path, output_pdbqt_path):
     try:
+        with open(pdb_path, 'r') as f:
+            pdb_content = f.read()
+        
+        cleaned_pdb_content = clean_protein_pdb(pdb_content)
+        
+        cleaned_pdb_path = str(pdb_path).replace('.pdb', '_cleaned.pdb')
+        with open(cleaned_pdb_path, 'w') as f:
+            f.write(cleaned_pdb_content)
+        
         python_dir = Path(sys.executable).parent
-        script_path = python_dir / "Scripts" / "mk_prepare_receptor.py"
-        if not script_path.exists():
-            script_path = python_dir / "Scripts" / "mk_prepare_receptor"
-        if script_path.exists():
-            cmd = [sys.executable, str(script_path), "--read_pdb", str(pdb_path), "-o", str(output_pdbqt_path)]
+        
+        possible_script_paths = [
+            python_dir / "bin" / "mk_prepare_receptor.py",
+            python_dir / "bin" / "mk_prepare_receptor",
+            python_dir / "Scripts" / "mk_prepare_receptor.py",
+            python_dir / "Scripts" / "mk_prepare_receptor",
+            Path("/usr/local/bin") / "mk_prepare_receptor.py",
+            Path("/usr/local/bin") / "mk_prepare_receptor"
+        ]
+        
+        script_path = None
+        for path in possible_script_paths:
+            if path.exists():
+                script_path = path
+                break
+        
+        if script_path:
+            cmd = [
+                sys.executable, 
+                str(script_path), 
+                "-i", str(cleaned_pdb_path),
+                "-o", str(output_pdbqt_path)
+            ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            
             if result.returncode == 0 and os.path.exists(output_pdbqt_path):
                 clean_pdbqt_file(output_pdbqt_path)
                 return output_pdbqt_path
-        with open(pdb_path, 'r') as f:
-            pdb_content = f.read()
-        pdbqt_content = convert_pdb_to_pdbqt_simple(pdb_content)
+        
+        pdbqt_content = convert_pdb_to_pdbqt_simple(cleaned_pdb_content)
+        
         with open(output_pdbqt_path, 'w') as f:
             f.write(pdbqt_content)
+        
         if not os.path.exists(output_pdbqt_path):
             raise RuntimeError("Receptor PDBQT file was not created")
+        
         return output_pdbqt_path
+        
     except Exception as e:
         raise RuntimeError(f"Protein preparation failed: {str(e)}")
+
 
 def clean_pdbqt_file(pdbqt_path):
     with open(pdbqt_path, 'r') as f:
@@ -110,40 +162,51 @@ def clean_pdbqt_file(pdbqt_path):
 def convert_pdb_to_pdbqt_simple(pdb_content):
     pdbqt_lines = []
     atom_types = {
-        'C': 'C', 'N': 'N', 'O': 'O', 'S': 'S',
-        'P': 'P', 'H': 'HD', 'F': 'F', 'Cl': 'Cl',
-        'Br': 'Br', 'I': 'I', 'Fe': 'Fe', 'Mg': 'Mg',
-        'Ca': 'Ca', 'Zn': 'Zn', 'Mn': 'Mn'
+        'C': 'C', 'N': 'N', 'O': 'O', 'S': 'S', 'P': 'P',
+        'H': 'HD', 'F': 'F', 'Cl': 'Cl', 'Br': 'Br', 'I': 'I',
+        'Fe': 'Fe', 'Mg': 'Mg', 'Ca': 'Ca', 'Zn': 'Zn', 'Mn': 'Mn'
     }
+    
     for line in pdb_content.split('\n'):
         if line.startswith('MODEL') or line.startswith('ENDMDL'):
             continue
-        if line.startswith('ATOM') or line.startswith('HETATM'):
+        
+        if line.startswith('ATOM'):
+            residue_name = line[17:20].strip()
+            if residue_name in ['HOH', 'WAT', 'TIP', 'TIP3', 'SOL']:
+                continue
+            
             if len(line) > 77 and line[76:78].strip():
                 element = line[76:78].strip()
             else:
                 atom_name = line[12:16].strip()
-                element = ''.join([c for c in atom_name if c.isalpha()])
+                element = ''.join(c for c in atom_name if c.isalpha())
                 if len(element) >= 2 and element[1].islower():
                     element = element[0].upper() + element[1]
                 elif len(element) >= 1:
                     element = element[0].upper()
                 else:
                     element = 'C'
+            
             ad_type = atom_types.get(element, 'C')
+            
             if len(line) >= 66:
-                base_line = line[:66]
+                baseline = line[:66]
             else:
-                base_line = line.ljust(66)
-            pdbqt_line = f"{base_line}    {0.000:6.3f}  {ad_type:>2s}"
+                baseline = line.ljust(66)
+            
+            pdbqt_line = f"{baseline}{0.000:>10.3f} {ad_type:<2s}\n"
             pdbqt_lines.append(pdbqt_line)
+        
         elif line.startswith('TER'):
-            pdbqt_lines.append(line)
+            pdbqt_lines.append(line + '\n')
         elif line.startswith('END') and not line.startswith('ENDMDL'):
-            pdbqt_lines.append(line)
+            pdbqt_lines.append(line + '\n')
+    
     if pdbqt_lines and not pdbqt_lines[-1].startswith('END'):
-        pdbqt_lines.append('END')
-    return '\n'.join(pdbqt_lines)
+        pdbqt_lines.append('END\n')
+    
+    return ''.join(pdbqt_lines)
 
 def prepare_ligand_meeko(sdf_path, output_pdbqt_path):
     try:
@@ -230,26 +293,35 @@ def parse_vina_output(pdbqt_file):
 
 def extract_top_poses(vina_output_pdbqt, protein_pdb, output_dir):
     poses = parse_vina_output(vina_output_pdbqt)
+    
     with open(protein_pdb, 'r') as f:
         protein_lines = f.readlines()
-    protein_atoms = [line for line in protein_lines if line.startswith(('ATOM', 'HETATM'))]
+    
+    protein_atoms = [line for line in protein_lines 
+                     if line.startswith('ATOM') 
+                     and line[17:20].strip() not in ['HOH', 'WAT', 'TIP', 'TIP3', 'SOL']]
+    
     complex_files = []
     for idx, pose in enumerate(poses, 1):
         complex_pdb = os.path.join(output_dir, f"complex_pose{idx}.pdb")
+        
         with open(complex_pdb, 'w') as f:
-            f.write(f"REMARK   Blind Docking Complex - Pose {idx}\n")
-            f.write(f"REMARK   Binding Affinity: {pose['affinity']:.2f} kcal/mol\n")
+            f.write(f"REMARK Blind Docking Complex - Pose {idx}\n")
+            f.write(f"REMARK Binding Affinity: {pose['affinity']:.2f} kcal/mol\n")
             f.writelines(protein_atoms)
             f.write("TER\n")
             ligand_lines = convert_ligand_to_hetatm(pose['pdblines'])
             f.writelines(ligand_lines)
             f.write("END\n")
+        
         complex_files.append({
             'path': complex_pdb,
             'pose': idx,
             'affinity': pose['affinity']
         })
+    
     return complex_files
+
 
 def convert_ligand_to_hetatm(pdbqt_lines):
     hetatm_lines = []
@@ -596,8 +668,7 @@ def main():
     - Automatically computes docking grid parameters
     - Uses AutoDock Vina for molecular docking
     - Outputs top 5 binding poses with interactive 3D visualization
-    - Supports surface and cartoon representation modes
-    **Reference:** CBDock2-style blind docking (covers entire protein surface)
+    - Supports surface, cartoon representation modes and a Interaction Analysis
     """)
     st.divider()
     st.header("Step 1: Configure AutoDock Vina")
