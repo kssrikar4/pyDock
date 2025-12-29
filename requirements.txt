@@ -1,0 +1,9 @@
+streamlit
+rdkit
+meeko
+biopython
+numpy
+scipy
+gemmi
+prolif
+MDAnalysis
