@@ -5,3 +5,4 @@ biopython
 numpy
 scipy
 pathlib
+gemmi
