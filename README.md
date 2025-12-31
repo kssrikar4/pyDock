@@ -5,7 +5,8 @@
 A fully automated blind docking pipeline that requires only three user inputs: protein PDB file, ligand file (SDF/MOL2), and AutoDock Vina executable path. Everything else grid parameters, binding box calculation, structure preparation is computed automatically.
 
 ## Short Video Tutorial
-![quickstart](.git/quickstart.mp4)
+
+![quickstart](.tutorial/quickstart.mp4)
 
 ## What This Does
 
