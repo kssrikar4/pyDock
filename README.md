@@ -6,7 +6,7 @@ A fully automated blind docking pipeline that requires only three user inputs: p
 
 ## Short Video Tutorial
 
-![quickstart](.tutorial/quickstart.mp4)
+https://github.com/user-attachments/assets/3e3318de-2420-4542-a069-befae9d3e2ee
 
 ## What This Does
 
